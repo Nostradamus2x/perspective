@@ -1,0 +1,29 @@
+<!-- templates/index.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Perspective - Making Sense of Indian News</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        .container { display: flex; justify-content: space-around; }
+        .column { width: 30%; padding: 10px; border: 1px solid #ccc; }
+        h2 { text-align: center; }
+    </style>
+</head>
+<body>
+    <h1>Perspective - Making Sense of Indian News</h1>
+    <div class="container">
+        {% for bias in ['left', 'center', 'right'] %}
+        <div class="column">
+            <h2>{{ bias.capitalize() }}</h2>
+            {% for article in articles[bias] %}
+                <p>
+                    <a href="{{ article.link }}" target="_blank">{{ article.title }}</a>
+                    <br><small>{{ article.source }}</small>
+                </p>
+            {% endfor %}
+        </div>
+        {% endfor %}
+    </div>
+</body>
+</html>
