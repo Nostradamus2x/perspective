@@ -10,8 +10,8 @@ NEWS_SOURCES = [
         "bias": "center"
     },
     {
-        "name": "The Wire",
-        "url": "https://thewire.in/rss",
+        "name": "Scroll.in",
+        "url": "https://feeds.feedburner.com/ScrollinArticles.rss",
         "bias": "left"
     },
     {
