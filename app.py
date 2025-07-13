@@ -6,32 +6,30 @@ app = Flask(__name__)
 NEWS_SOURCES = [
     {
         "name": "The Hindu",
-        "url": "https://www.thehindu.com/news/national/feeder/default.rss",
-        "bias": "center"
+        "url": "https://www.thehindu.com/news/national/feeder/default.rss"
     },
     {
-        "name": "The Wire",
-        "url": "https://thewire.in/rss",
-        "bias": "left"
+        "name": "Scroll.in",
+        "url": "https://feeds.feedburner.com/ScrollinArticles.rss"
     },
     {
         "name": "OpIndia",
-        "url": "https://www.opindia.com/feed/",
-        "bias": "right"
+        "url": "https://www.opindia.com/feed/"
     }
 ]
 
 def fetch_articles():
-    articles_by_bias = {"left": [], "center": [], "right": []}
+    articles = []
     for source in NEWS_SOURCES:
         feed = feedparser.parse(source["url"])
-        for entry in feed.entries[:10]:  # Limit to 10 per source
-            articles_by_bias[source["bias"]].append({
+        for entry in feed.entries[:10]:
+            articles.append({
                 "title": entry.title,
                 "link": entry.link,
+                "summary": getattr(entry, "summary", ""),
                 "source": source["name"]
             })
-    return articles_by_bias
+    return articles
 
 @app.route("/", methods=["GET"])
 def index():
