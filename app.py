@@ -18,8 +18,13 @@ NEWS_SOURCES = [
     },
     {
         "name": "OpIndia",
-        "url": "https://feeds.feedburner.com/opindia",
+        "url": "https://www.opindia.com/feed/",
         "bias": "right"
+    },
+    {
+        "name": "Altnews",
+        "url": "https://www.altnews.in/feed/",
+        "bias": "factcheck"
     }
 ]
 
@@ -28,11 +33,11 @@ def clean_title(title):
     return re.sub(r'[^\w\s]', '', title.lower())
 
 def fetch_articles():
-    articles_by_bias = {"left": [], "center": [], "right": []}
+    articles_by_bias = {"left": [], "center": [], "right": [], "factcheck": []}
     all_articles = []
     for source in NEWS_SOURCES:
         feed = feedparser.parse(source["url"])
-        for entry in feed.entries[:10]:  # Limit to 10 per source
+        for entry in feed.entries[:100]:  # Limit to 10 per source
             article = {
                 "title": entry.title,
                 "link": entry.link,
@@ -50,7 +55,7 @@ import numpy as np
 
 def find_highlight_topic(all_articles):
     # Group articles by bias
-    grouped = {'left': [], 'center': [], 'right': []}
+    grouped = {'left': [], 'center': [], 'right': [], 'factcheck': []}
     for article in all_articles:
         grouped[article['bias']].append(article)
     # If any group is empty, can't find a trio
@@ -63,36 +68,47 @@ def find_highlight_topic(all_articles):
     left_titles = [a['title'] for a in grouped['left']]
     center_titles = [a['title'] for a in grouped['center']]
     right_titles = [a['title'] for a in grouped['right']]
+    factcheck_titles = [a['title'] for a in grouped['factcheck']]
+    
     # Encode all headlines
     left_embeddings = model.encode(left_titles)
     center_embeddings = model.encode(center_titles)
     right_embeddings = model.encode(right_titles)
+    factcheck_embeddings = model.encode(factcheck_titles)
+    
 
-    # Find the trio (one from each bias) with the highest average pairwise similarity
+    # Find the quartet (one from each bias) with the highest average pairwise similarity
     best_score = -1
-    best_trio = None
+    best_quartet = None
     for i, l_emb in enumerate(left_embeddings):
         for j, c_emb in enumerate(center_embeddings):
             for k, r_emb in enumerate(right_embeddings):
-                # Compute pairwise cosine similarities
-                sim_lc = np.dot(l_emb, c_emb) / (np.linalg.norm(l_emb) * np.linalg.norm(c_emb))
-                sim_lr = np.dot(l_emb, r_emb) / (np.linalg.norm(l_emb) * np.linalg.norm(r_emb))
-                sim_cr = np.dot(c_emb, r_emb) / (np.linalg.norm(c_emb) * np.linalg.norm(r_emb))
-                avg_sim = (sim_lc + sim_lr + sim_cr) / 3
-                if avg_sim > best_score:
-                    best_score = avg_sim
-                    best_trio = {
-                        'left': grouped['left'][i],
-                        'center': grouped['center'][j],
-                        'right': grouped['right'][k]
-                    }
+                for m, f_emb in enumerate(factcheck_embeddings):
+           
+                    # Compute pairwise cosine similarities
+                    sim_lc = np.dot(l_emb, c_emb) / (np.linalg.norm(l_emb) * np.linalg.norm(c_emb))
+                    sim_lr = np.dot(l_emb, r_emb) / (np.linalg.norm(l_emb) * np.linalg.norm(r_emb))
+                    sim_lf = np.dot(l_emb, f_emb) / (np.linalg.norm(l_emb) * np.linalg.norm(f_emb))
+                    sim_cr = np.dot(c_emb, r_emb) / (np.linalg.norm(c_emb) * np.linalg.norm(r_emb))
+                    sim_cf = np.dot(c_emb, f_emb) / (np.linalg.norm(c_emb) * np.linalg.norm(f_emb))
+                    sim_rf = np.dot(r_emb, f_emb) / (np.linalg.norm(r_emb) * np.linalg.norm(f_emb))
+                    avg_sim = (sim_lc + sim_lr + sim_lf + sim_cr + sim_cf + sim_rf) / 6
+                    if avg_sim > best_score:
+                        best_score = avg_sim
+                        best_quartet = {
+                            'left': grouped['left'][i],
+                            'center': grouped['center'][j],
+                            'right': grouped['right'][k],
+                            'factcheck': grouped['factcheck'][m]
+                        }
+                        
     # Set a minimum similarity threshold to avoid unrelated headlines
     if best_score < 0.3:  # You can adjust this threshold
         return None, None
 
     # Use the center headline as the topic label
-    highlight_word = best_trio['center']['title']
-    return highlight_word, best_trio
+    highlight_word = best_quartet['center']['title']
+    return highlight_word, best_quartet
 
 
 # def find_highlight_topic(all_articles):
@@ -121,7 +137,7 @@ def find_highlight_topic(all_articles):
         # Get articles from each bias containing this word
         highlight_articles = {
             bias: next((a for a in all_articles if (a["bias"] == bias and word in a["clean_title"].split())), None)
-            for bias in ["left", "center", "right"]
+            for bias in ["left", "center", "right","factcheck"]
         }
         if all(highlight_articles.values()):
             return word, highlight_articles

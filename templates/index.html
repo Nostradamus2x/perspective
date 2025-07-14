@@ -22,7 +22,7 @@
     <div class="highlight">
         <div class="highlight-title">Highlight of the Day: "{{ highlight_word|capitalize }}"</div>
         <div class="highlight-row">
-            {% for bias in ['left', 'center', 'right'] %}
+            {% for bias in ['left', 'center', 'right', 'factcheck'] %}
             <div class="highlight-col">
                 {% if highlight_articles[bias] %}
                     <a href="{{ highlight_articles[bias].link }}" target="_blank">{{ highlight_articles[bias].title }}</a>
@@ -38,7 +38,7 @@
 
     <!-- All Articles -->
     <div class="container">
-        {% for bias in ['left', 'center', 'right'] %}
+        {% for bias in ['left', 'center', 'right', 'factcheck'] %}
         <div class="column">
             <h2>{{ bias.capitalize() }}</h2>
             {% for article in articles[bias] %}
