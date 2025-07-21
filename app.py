@@ -9,10 +9,10 @@ NEWS_SOURCES = [
     {
         "name": "The Hindu",
         "url": "https://www.thehindu.com/news/national/feeder/default.rss"
+        "bias": "center"
     },
     {
         "name": "Scroll.in",
-
         "url": "https://feeds.feedburner.com/ScrollinArticles.rss",
         "bias": "left"
     },
