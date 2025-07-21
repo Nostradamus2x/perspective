@@ -40,23 +40,21 @@
         {% for bias in ['left', 'center', 'right', 'factcheck'] %}
         <div class="column">
             <h2>{{ bias.capitalize() }}</h2>
-            {% for article in articles[bias] %}
-                <p>
-                    <a href="{{ article.link }}" target="_blank">{{ article.title }}</a>
-                </td>
-                <td>{{ article.source }}</td>
-                <td>
-                    {% if article.bias %}
-                        <span class="bias-{{ article.bias }}">
-                            {{ article.bias|capitalize }}
-                        </span>
-                    {% else %}
-                        <em>Not scored</em>
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+                {% for article in articles[bias] %}
+                    <p>
+                        <a href="{{ article.link }}" target="_blank">{{ article.title }}</a><br>
+                        <small>{{ article.source }}</small><br>
+                        <!-- {% if article.bias %}
+                            <span class="bias-{{ article.bias }}">
+                                <small>{{ article.bias|capitalize }}</small>
+                            </span>
+                        {% else %}
+                            <em>Not scored</em>
+                        {% endif %} -->
+                    </p>
+                {% endfor %}
+        </div>
+        {% endfor %}
+    </div>
 </body>
 </html>
