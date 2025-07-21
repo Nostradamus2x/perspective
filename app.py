@@ -112,27 +112,6 @@ def find_highlight_topic(all_articles):
     return highlight_word, best_quartet
 
 
-# def find_highlight_topic(all_articles):
-#     highlight_articles = {}
-#     for bias in ['left', 'center', 'right']:
-#         article = next((a for a in all_articles if a['bias'] == bias), None)
-#         highlight_articles[bias] = article
-#     return "Test Highlight", highlight_articles
-
-
-# def find_highlight_topic(all_articles):
-#     # Build a Counter of words in all titles, ignore stopwords for better matching
-#     stopwords = set([
-#         "the", "of", "in", "on", "to", "and", "a", "an", "for", "with", "as", "by", "from", "at", "is", "are", "was", "be"
-#     ])
-#     word_counter = Counter()
-#     for article in all_articles:
-#         words = [w for w in article["clean_title"].split() if w not in stopwords]
-#         word_counter.update(words)
-#     # Find the most common non-stopword
-#     if not word_counter:
-#         return None, None
-
     # Try to find a word that appears in all three sources
     for word, count in word_counter.most_common():
         # Get articles from each bias containing this word
