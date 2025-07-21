@@ -1,4 +1,5 @@
 from flask import Flask, render_template, request
+from flask_caching import Cache
 import feedparser
 import re
 from collections import Counter
@@ -7,6 +8,13 @@ import numpy as np
 from sentence_transformers import SentenceTransformer
 
 app = Flask(__name__)
+
+#Cache Configuration
+app.config['CACHE_TYPE'] = 'filesystem'
+app.config['CACHE_DIR'] = 'flask_cache'  # Directory for storing cache files
+app.config['CACHE_DEFAULT_TIMEOUT'] = 10 * 60  # 10 minutes
+cache = Cache(app)
+
 
 NEWS_SOURCES = [
     {
@@ -37,19 +45,37 @@ def clean_title(title):
 
 ########
 # Caching setup
-CACHE = {
-    "articles": None,
-    "all_articles": None,
-    "timestamp": 0
-}
-CACHE_TIMEOUT = 100 * 60  # 100 minutes
+# CACHE = {
+#     "articles": None,
+#     "all_articles": None,
+#     "highlight_word": None,
+#     "highlight_articles": None,
+#     "timestamp": 0,
+#     "fetching": False
+# }
 
-def fetch_articles_cached():
-    now = time.time()
-    if (CACHE["articles"] is not None) and (now - CACHE["timestamp"] < CACHE_TIMEOUT):
-        # Use cache if fresh
-        print("Using cached articles")
-        return CACHE["articles"], CACHE["all_articles"]
+# CACHE_TIMEOUT = 100 * 60  # 100 minutes
+
+model = SentenceTransformer('all-mpnet-base-v2')  # Fast, high-quality model
+
+EMBED_CACHE = {}
+
+def embed_titles (titles):
+    not_embedded = [t for t in titles if t not in EMBED_CACHE]
+    if not_embedded:
+        vectors = model.encode(not_embedded)
+        for t, v in zip(not_embedded, vectors):
+            EMBED_CACHE[t] = v
+    return [EMBED_CACHE[t] for t in titles]
+
+
+@cache.cached(key_prefix="news_data")    
+def fetch_and_process_articles():
+    # now = time.time()
+    # if (CACHE["articles"] is not None) and (now - CACHE["timestamp"] < CACHE_TIMEOUT):
+    #     # Use cache if fresh
+    #     print("Using cached articles")
+    #     return CACHE["articles"], CACHE["all_articles"]
 
     print("Fetching fresh articles from the web")
 
@@ -58,7 +84,7 @@ def fetch_articles_cached():
     for source in NEWS_SOURCES:
         try:
             feed = feedparser.parse(source["url"])
-            for entry in feed.entries[:10]:  # Limit to 10 per source
+            for entry in feed.entries[:50]:  # Limit to 10 per source
                 article = {
                     "title": entry.title,
                     "link": entry.link,
@@ -71,14 +97,15 @@ def fetch_articles_cached():
         except Exception as e:
             print (f"Failed to fetch {source['name']}:{e}")
             continue
-    #Update CACHE
-    CACHE["articles"] = articles_by_bias
-    CACHE["all_articles"] = all_articles
-    CACHE["timestamp"] = now
-    return articles_by_bias, all_articles
+    
+    # #Update CACHE
+    # CACHE["articles"] = articles_by_bias
+    # CACHE["all_articles"] = all_articles
+    # CACHE["timestamp"] = now
+    # return articles_by_bias, all_articles
 
 
-def find_highlight_topic(all_articles):
+    # Highlight logic (can cache/memoize separately if needed)
     # Group articles by bias
     grouped = {'left': [], 'center': [], 'right': [], 'factcheck': []}
     for article in all_articles:
@@ -88,7 +115,6 @@ def find_highlight_topic(all_articles):
         return None, None
 
     # Prepare all headlines and encode them
-    model = SentenceTransformer('all-mpnet-base-v2')  # Fast, high-quality model
     # Create lists of headlines for each bias
     left_titles = [a['title'] for a in grouped['left']]
     center_titles = [a['title'] for a in grouped['center']]
@@ -96,10 +122,10 @@ def find_highlight_topic(all_articles):
     factcheck_titles = [a['title'] for a in grouped['factcheck']]
     
     # Encode all headlines
-    left_embeddings = model.encode(left_titles)
-    center_embeddings = model.encode(center_titles)
-    right_embeddings = model.encode(right_titles)
-    factcheck_embeddings = model.encode(factcheck_titles)
+    left_embeddings = embed_titles(left_titles)
+    center_embeddings = embed_titles(center_titles)
+    right_embeddings = embed_titles(right_titles)
+    factcheck_embeddings = embed_titles(factcheck_titles)
     
 
     # Find the quartet (one from each bias) with the highest average pairwise similarity
@@ -128,29 +154,14 @@ def find_highlight_topic(all_articles):
                         }
                         
     # Set a minimum similarity threshold to avoid unrelated headlines
-    if best_score < 0.3:  # You can adjust this threshold
-        return None, None
-
-    # Use the center headline as the topic label
-    highlight_word = best_quartet['center']['title']
-    return highlight_word, best_quartet
-
-
-    # Try to find a word that appears in all three sources
-    for word, count in word_counter.most_common():
-        # Get articles from each bias containing this word
-        highlight_articles = {
-            bias: next((a for a in all_articles if (a["bias"] == bias and word in a["clean_title"].split())), None)
-            for bias in ["left", "center", "right","factcheck"]
-        }
-        if all(highlight_articles.values()):
-            return word, highlight_articles
-    return None, None
+    if best_score >= 0.3 and best_quartet:  # You can adjust this threshold
+        highlight_word = best_quartet['center']['title'] # Use the center headline as the topic label
+        highlight_articles = best_quartet
+    return articles_by_bias,all_articles, highlight_word, highlight_articles
 
 @app.route("/", methods=["GET"])
 def index():
-    articles, all_articles = fetch_articles_cached()
-    highlight_word, highlight_articles = find_highlight_topic(all_articles)
+    articles, all_articles, highlight_word, highlight_articles = fetch_and_process_articles()
     return render_template(
         "index.html",
         articles=articles,
