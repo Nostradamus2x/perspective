@@ -8,7 +8,7 @@ app = Flask(__name__)
 NEWS_SOURCES = [
     {
         "name": "The Hindu",
-        "url": "https://www.thehindu.com/news/national/feeder/default.rss"
+        "url": "https://www.thehindu.com/news/national/feeder/default.rss",
         "bias": "center"
     },
     {
