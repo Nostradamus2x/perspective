@@ -2,6 +2,9 @@ from flask import Flask, render_template, request
 import feedparser
 import re
 from collections import Counter
+import time
+import numpy as np
+from sentence_transformers import SentenceTransformer
 
 app = Flask(__name__)
 
@@ -32,27 +35,48 @@ def clean_title(title):
     # Lowercase and remove punctuation for better matching
     return re.sub(r'[^\w\s]', '', title.lower())
 
-def fetch_articles():
+########
+# Caching setup
+CACHE = {
+    "articles": None,
+    "all_articles": None,
+    "timestamp": 0
+}
+CACHE_TIMEOUT = 100 * 60  # 100 minutes
+
+def fetch_articles_cached():
+    now = time.time()
+    if (CACHE["articles"] is not None) and (now - CACHE["timestamp"] < CACHE_TIMEOUT):
+        # Use cache if fresh
+        print("Using cached articles")
+        return CACHE["articles"], CACHE["all_articles"]
+
+    print("Fetching fresh articles from the web")
 
     articles_by_bias = {"left": [], "center": [], "right": [], "factcheck": []}
     all_articles = []
     for source in NEWS_SOURCES:
-        feed = feedparser.parse(source["url"])
-        for entry in feed.entries[:100]:  # Limit to 10 per source
-            article = {
-                "title": entry.title,
-                "link": entry.link,
-                "source": source["name"],
-                "bias": source["bias"],
-                "clean_title": clean_title(entry.title)
-            }
-            articles_by_bias[source["bias"]].append(article)
-            all_articles.append(article)
+        try:
+            feed = feedparser.parse(source["url"])
+            for entry in feed.entries[:10]:  # Limit to 10 per source
+                article = {
+                    "title": entry.title,
+                    "link": entry.link,
+                    "source": source["name"],
+                    "bias": source["bias"],
+                    "clean_title": clean_title(entry.title)
+                }
+                articles_by_bias[source["bias"]].append(article)
+                all_articles.append(article)
+        except Exception as e:
+            print (f"Failed to fetch {source['name']}:{e}")
+            continue
+    #Update CACHE
+    CACHE["articles"] = articles_by_bias
+    CACHE["all_articles"] = all_articles
+    CACHE["timestamp"] = now
     return articles_by_bias, all_articles
 
-
-from sentence_transformers import SentenceTransformer
-import numpy as np
 
 def find_highlight_topic(all_articles):
     # Group articles by bias
@@ -125,7 +149,7 @@ def find_highlight_topic(all_articles):
 
 @app.route("/", methods=["GET"])
 def index():
-    articles, all_articles = fetch_articles()
+    articles, all_articles = fetch_articles_cached()
     highlight_word, highlight_articles = find_highlight_topic(all_articles)
     return render_template(
         "index.html",
@@ -135,5 +159,5 @@ def index():
     )
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=8080, debug=True)
 
