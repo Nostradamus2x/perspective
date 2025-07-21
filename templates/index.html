@@ -1,42 +1,47 @@
-<!-- index.html -->
 <!DOCTYPE html>
 <html>
 <head>
     <title>Perspective - Making Sense of Indian News</title>
     <style>
         body { font-family: Arial, sans-serif; }
-        .articles-table {
-            width: 90%;
-            margin: 0 auto;
-            border-collapse: collapse;
-        }
-        .articles-table th, .articles-table td {
-            border: 1px solid #ccc;
-            padding: 8px;
-            text-align: left;
-        }
-        .articles-table th {
-            background-color: #f2f2f2;
-        }
-        .bias-left { color: #d9534f; font-weight: bold; }
-        .bias-center { color: #5bc0de; font-weight: bold; }
-        .bias-right { color: #5cb85c; font-weight: bold; }
+        .container { display: flex; justify-content: space-around; }
+        .column { width: 30%; padding: 10px; border: 1px solid #ccc; }
+        h2 { text-align: center; }
+        .highlight { background: #f9f9c5; border: 2px solid #f7e06c; margin-bottom: 30px; padding: 15px; }
+        .highlight-title { font-size: 1.2em; font-weight: bold; margin-bottom: 10px; }
+        .highlight-row { display: flex; justify-content: space-between; }
+        .highlight-col { width: 32%; background: #fffde7; padding: 10px; border-radius: 5px; }
+        .source-label { font-size: 0.95em; color: #666; }
     </style>
 </head>
 <body>
     <h1>Perspective - Making Sense of Indian News</h1>
-    <table class="articles-table">
-        <thead>
-            <tr>
-                <th>Title</th>
-                <th>Source</th>
-                <th>Leaning Score</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for article in articles %}
-            <tr>
-                <td>
+    <!-- Highlight of the Day -->
+    {% if highlight_word and highlight_articles %}
+    <div class="highlight">
+        <div class="highlight-title">Highlight of the Day: "{{ highlight_word|capitalize }}"</div>
+        <div class="highlight-row">
+            {% for bias in ['left', 'center', 'right', 'factcheck'] %}
+            <div class="highlight-col">
+                {% if highlight_articles[bias] %}
+                    <a href="{{ highlight_articles[bias].link }}" target="_blank">{{ highlight_articles[bias].title }}</a>
+                    <div class="source-label">{{ highlight_articles[bias].source }} ({{ bias.capitalize() }})</div>
+                {% else %}
+                    <em>No coverage</em>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- All Articles -->
+    <div class="container">
+        {% for bias in ['left', 'center', 'right', 'factcheck'] %}
+        <div class="column">
+            <h2>{{ bias.capitalize() }}</h2>
+            {% for article in articles[bias] %}
+                <p>
                     <a href="{{ article.link }}" target="_blank">{{ article.title }}</a>
                 </td>
                 <td>{{ article.source }}</td>
