@@ -16,7 +16,6 @@
 </head>
 <body>
     <h1>Perspective - Making Sense of Indian News</h1>
-
     <!-- Highlight of the Day -->
     {% if highlight_word and highlight_articles %}
     <div class="highlight">
@@ -44,11 +43,20 @@
             {% for article in articles[bias] %}
                 <p>
                     <a href="{{ article.link }}" target="_blank">{{ article.title }}</a>
-                    <br><small>{{ article.source }}</small>
-                </p>
+                </td>
+                <td>{{ article.source }}</td>
+                <td>
+                    {% if article.bias %}
+                        <span class="bias-{{ article.bias }}">
+                            {{ article.bias|capitalize }}
+                        </span>
+                    {% else %}
+                        <em>Not scored</em>
+                    {% endif %}
+                </td>
+            </tr>
             {% endfor %}
-        </div>
-        {% endfor %}
-    </div>
+        </tbody>
+    </table>
 </body>
 </html>
