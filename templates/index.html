@@ -2,18 +2,163 @@
 <html>
 <head>
     <title>Perspective - Making Sense of Indian News</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
     <style>
-        body { font-family: Arial, sans-serif; }
-        .container { display: flex; justify-content: space-around; }
-        .column { width: 30%; padding: 10px; border: 1px solid #ccc; }
-        h2 { text-align: center; }
-        .highlight { background: #f9f9c5; border: 2px solid #f7e06c; margin-bottom: 30px; padding: 15px; }
-        .highlight-title { font-size: 1.2em; font-weight: bold; margin-bottom: 10px; }
-        .highlight-row { display: flex; justify-content: space-between; }
-        .highlight-col { width: 32%; background: #fffde7; padding: 10px; border-radius: 5px; }
-        .source-label { font-size: 0.95em; color: #666; }
+        body { 
+
+            font-family: 'Inter', Arial, sans-serif; 
+            background: #f5f6fa;
+            margin: 0;
+            padding: 0;
+            color: #262a36;
+        }
+
+        h1 {
+
+            text-align: center;
+            margin-top: 32px;
+            font-size: 2.2em;
+            letter-spacing: 1.3px;
+            color: #1a2633;
+            font-weight: 600;
+        }
+
+        .container { 
+            display: flex; 
+            justify-content: space-between;
+            gap: 28px;
+            max-width: 1240px;
+            margin: 38px auto 40px auto;
+            padding: 0 12px; 
+        }
+
+        .column {
+            flex: 1;
+            min-width: 260px;
+            background: #fff;
+            border-radius: 15px;
+            box-shadow: 0 2px 18px rgba(60,63,90,0.06);
+            padding: 18px 18px 14px 18px;
+            border-top: 7px solid #bbb;
+            transition: box-shadow 0.2s, border-color 0.2s;
+        }
+
+        .column:nth-child(1) { border-color: #ec6565; }   /* Left - red */
+        .column:nth-child(2) { border-color: #3579db; }   /* Center - blue */
+        .column:nth-child(3) { border-color: #53b47a; }   /* Right - green */
+        .column:nth-child(4) { border-color: #239797; }   /* Fact-check - teal */
+
+
+        h2 { text-align: center; margin: 12px 0 24px 0; color: #495161; font-size: 1.25em; font-weight: 600;}
+
+        /* Highlight of the day */
+        .highlight { 
+            background: #fffbe3;
+            border: 2.5px solid #ffe066;
+            border-radius: 14px;
+            max-width: 1060px;
+            margin: 34px auto 38px;
+            padding: 28px 32px 26px 32px;
+            box-shadow: 0 3px 28px rgba(250,225,50,0.09); 
+        }
+        .highlight-title { 
+            font-size: 1.27em;
+            font-weight: 600;
+            margin-bottom: 19px;
+            color: #9f7d11;
+            text-align: center;
+            letter-spacing: 0.03em;
+        }
+        .highlight-row { 
+            display: flex;
+            justify-content: space-around;
+            gap: 18px;
+        }
+        .highlight-col { 
+            flex: 1;
+            background: #fffde7;
+            padding: 16px 13px;
+            border-radius: 8px;
+            min-height: 88px;
+            text-align: left;
+            box-shadow: 0 1px 6px rgba(230,225,120,0.09); 
+        }
+        .highlight-col a {
+            font-weight: 600;
+            color: #d37b1c;
+            text-decoration: none;
+            transition: color 0.18s;
+        }
+        .highlight-col a:hover {
+            color: #ff9800; 
+            text-decoration: underline;
+        }
+
+        .source-label { 
+            font-size: 0.96em;
+            color: #666;
+            margin-top: 5px;
+            display: block; 
+        }
+
+        /* Article card styling */
+        .article-card {
+            background: #f7f7fa;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(60,80,120,0.06);
+            padding: 12px 16px 11px 16px;
+            margin-bottom: 16px;
+            transition: transform 0.08s, box-shadow 0.12s;
+        }
+        .article-card:hover {
+            box-shadow: 0 6px 24px rgba(90,120,200,0.13);
+            transform: translateY(-3px) scale(1.01);
+        }
+        .article-card a {
+            color: #1b4ba0;
+            font-weight: 500;
+            text-decoration: none;
+            transition: color 0.19s;
+        }
+        .article-card a:hover {
+            color: #263663;
+            text-decoration: underline;
+        }
+        .footer {
+            text-align: center;
+            color: #9097a3;
+            padding: 30px 0 18px 0;
+            font-size: 1em;
+            font-family: 'Inter', Arial, sans-serif;
+        }
+        /* Bias dot indicator (optional) */
+        .bias-dot {
+            display: inline-block;
+            border-radius: 50%;
+            width: 10px; height: 10px; margin-right: 6px;
+            vertical-align: middle;
+        }
+        .dot-left { background-color: #ec6565; }
+        .dot-center { background-color: #3579db; }
+        .dot-right { background-color: #53b47a; }
+        .dot-factcheck { background-color: #239797;}
+        /* Responsive adjustments */
+        @media (max-width: 1020px) {
+            .container, .highlight-row { flex-direction: column; }
+            .container { gap: 0; }
+            .column, .highlight-col { min-width: unset; margin-bottom: 16px;}
+            .highlight-row { gap: 0; }
+        }
+        @media (max-width: 650px) {
+            .highlight { padding: 12px 4vw; }
+            h1 { font-size: 1.2em; }
+            .container { padding: 0 2vw; }
+            .column { padding: 13px 8px; }
+        }
+
     </style>
 </head>
+
 <body>
     <h1>Perspective - Making Sense of Indian News</h1>
     <!-- Highlight of the Day -->
@@ -24,8 +169,9 @@
             {% for bias in ['left', 'center', 'right', 'factcheck'] %}
             <div class="highlight-col">
                 {% if highlight_articles[bias] %}
+                    <span class="bias-dot dot-{{ bias }}"></span>
                     <a href="{{ highlight_articles[bias].link }}" target="_blank">{{ highlight_articles[bias].title }}</a>
-                    <div class="source-label">{{ highlight_articles[bias].source }} ({{ bias.capitalize() }})</div>
+                    <span class="source-label">{{ highlight_articles[bias].source }} ({{ bias.capitalize() }})</span>
                 {% else %}
                     <em>No coverage</em>
                 {% endif %}
@@ -39,20 +185,17 @@
     <div class="container">
         {% for bias in ['left', 'center', 'right', 'factcheck'] %}
         <div class="column">
-            <h2>{{ bias.capitalize() }}</h2>
-                {% for article in articles[bias] %}
-                    <p>
-                        <a href="{{ article.link }}" target="_blank">{{ article.title }}</a><br>
-                        <small>{{ article.source }}</small><br>
-                        <!-- {% if article.bias %}
-                            <span class="bias-{{ article.bias }}">
-                                <small>{{ article.bias|capitalize }}</small>
-                            </span>
-                        {% else %}
-                            <em>Not scored</em>
-                        {% endif %} -->
-                    </p>
-                {% endfor %}
+            <h2>
+                <span class="bias-dot dot-{{ bias }}"></span>
+                {{ bias.capitalize() }}
+            </h2>
+            
+            {% for article in articles[bias] %}
+            <div class ="article-card">
+                    <a href="{{ article.link }}" target="_blank">{{ article.title }}</a><br>
+                    <span class="source-label">{{ article.source }}</span>
+            </div>
+            {% endfor %}
         </div>
         {% endfor %}
     </div>
