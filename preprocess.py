@@ -12,25 +12,25 @@ from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 
 # For Hindi processing
-import os
-from indicnlp.tokenize import sentence_tokenize, indic_tokenize
+# import os
+# from indicnlp.tokenize import sentence_tokenize, indic_tokenize
 
 # ---------------- SETUP -------------------
 
-# Set up Indic NLP resource path. Change this to the actual path where you cloned 'indic_nlp_resources'
-INDIC_RESOURCES_PATH = '/Users/ayushshukla/Downloads/perspective/indic_nlp_resources'  # <<<--- CHANGE THIS
-os.environ["INDIC_RESOURCES_PATH"] = INDIC_RESOURCES_PATH
+# # Set up Indic NLP resource path. Change this to the actual path where you cloned 'indic_nlp_resources'
+# INDIC_RESOURCES_PATH = '/Users/ayushshukla/Downloads/perspective/indic_nlp_resources'  # <<<--- CHANGE THIS
+# os.environ["INDIC_RESOURCES_PATH"] = INDIC_RESOURCES_PATH
 
 nltk.download('stopwords')
 nltk.download('wordnet')
 
 # Get stopwords once for performance
 en_stopwords = set(stopwords.words('english'))
-def load_hindi_stopwords(file_path):
-    with open(file_path, encoding='utf-8') as f:
-        return set(line.strip() for line in f if line.strip())
+# def load_hindi_stopwords(file_path):
+#     with open(file_path, encoding='utf-8') as f:
+#         return set(line.strip() for line in f if line.strip())
         
-hi_stopwords = load_hindi_stopwords('stopwords-hi.txt')
+# hi_stopwords = load_hindi_stopwords('stopwords-hi.txt')
 
 lemmatizer = WordNetLemmatizer()
 
@@ -70,7 +70,10 @@ def preprocess_article(text):
     return ' '.join(tokens)
 
 # --------- LOAD & CLEAN DATA ----------
-df = pd.read_csv('ndtv_articles_with_text.csv')
+df = pd.read_csv('ndtv_articles.csv')
+
+# Remove rows with blank article_text
+df = df[df['article_text'].notnull() & (df['article_text'].str.strip() != "")]
 
 # tqdm adds a progress bar for big datasets
 tqdm.pandas()

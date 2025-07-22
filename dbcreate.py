@@ -2,6 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 import pandas as pd
 from datetime import datetime
+import re
 
 data = []
 
@@ -15,34 +16,25 @@ for year in range(2024, current_year + 1):
     else:
         month_end = 12
 
-# url = 'https://archives.ndtv.com/articles/2025-01.html'
+def is_english(text):
+    # Returns True if the text contains only English letters, numbers, spaces, or basic punctuation
+    # You can expand this to include more punctuation/special cases if needed.
+    return bool(re.match(r'^[A-Za-z0-9\s,._"\'\:;\(\)\[\]\?!@#&*%$-]+$', text))
 
-# response = requests.get(url)
-# response.encoding = 'utf-8'  # Force UTF-8!
-# html = response.text
-# soup = BeautifulSoup(html, 'lxml')
-
-
-# articles = soup.find_all('li')
-
-
-# with open('ndtv_output.txt', 'w', encoding='utf-8') as f:
-#     for article in articles:
-#         if article.find('a'):  # likely filters story items
-#             f.write(article.text.strip() + '\n')
-
-
-    for month in range(1, month_end + 1):
-        url = f"https://archives.ndtv.com/articles/{year}-{month:02d}.html"
-        resp = requests.get(url)
-        resp.encoding = 'utf-8'  # Force UTF-8!
-        if resp.status_code != 200:
-            print(f"Failed to fetch {url}: {resp.status_code}")
-            continue
-        soup = BeautifulSoup(resp.content, "html.parser")
-        for item in soup.find_all("li"):
-            headline = item.get_text(strip=True)
+print("Reached for loop")
+for month in range(1, month_end + 1):
+    url = f"https://archives.ndtv.com/articles/{year}-{month:02d}.html"
+    print("Year is ",year,". Month is ",month)
+    resp = requests.get(url)
+    if resp.status_code != 200:
+        print(f"Failed to fetch {url}: {resp.status_code}")
+        continue
+    soup = BeautifulSoup(resp.content, "html.parser")
+    for item in soup.find_all("li"):
+        headline = item.get_text(strip=True)
+        if is_english(headline):
             link = item.find("a")["href"] if item.find("a") else None
+
             data.append({
                 "outlet": "NDTV",
                 "date": f"{year}-{month:02d}",
@@ -51,4 +43,4 @@ for year in range(2024, current_year + 1):
             })
 
 df = pd.DataFrame(data)
-df.to_csv("ndtv_news.csv", index=False, encoding = "utf-8")
+df.to_csv("ndtv_headlines.csv", index=False, encoding = "utf-8")

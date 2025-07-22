@@ -33,7 +33,7 @@ plt.show()
 
 
 from wordcloud import WordCloud
-text_pro = ' '.join(df[df['label'] == 'pro-government']['cleaned_text'])
+text_pro = ' '.join(df[df['label'] == 'Pro-Government']['cleaned_text'])
 font_path = '/Users/ayushshukla/Downloads/perspective/NotoSansDevanagari-Regular.ttf'  # update path as needed
 
 
@@ -48,7 +48,7 @@ plt.show()
 
 from sklearn.feature_extraction.text import CountVectorizer
 vec = CountVectorizer(stop_words='english', max_features=20)
-X = vec.fit_transform(df[df['label'] == 'pro-government']['cleaned_text'])
+X = vec.fit_transform(df[df['label'] == 'Pro-Government']['cleaned_text'])
 word_counts = X.sum(axis=0).A1
 keywords = vec.get_feature_names_out()
 plt.bar(keywords, word_counts)
@@ -59,9 +59,9 @@ plt.show()
 
 
 
-# Simple font test
-import matplotlib.pyplot as plt
-plt.rcParams['font.family'] = 'Noto Sans Devanagari'
-plt.rcParams['font.sans-serif'] = ['NotoSansDevanagari-Regular.ttf']
-plt.text(0.1, 0.5, "यह हिंदी है", fontsize=32)
-plt.show()
+# # Simple font test
+# import matplotlib.pyplot as plt
+# plt.rcParams['font.family'] = 'Noto Sans Devanagari'
+# plt.rcParams['font.sans-serif'] = ['NotoSansDevanagari-Regular.ttf']
+# plt.text(0.1, 0.5, "यह हिंदी है", fontsize=32)
+# plt.show()
