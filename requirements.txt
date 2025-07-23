@@ -41,6 +41,7 @@ feedfinder2==0.0.4
 feedparser==6.0.11
 filelock==3.18.0
 Flask==3.1.1
+flask-caching
 Flask-SQLAlchemy==3.1.1
 fonttools==4.51.0
 fqdn==1.5.1
