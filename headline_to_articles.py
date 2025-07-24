@@ -3,7 +3,7 @@
 
 import pandas as pd
 
-df = pd.read_csv('ndtv_headlines_clean.csv')
+df = pd.read_csv('opindia_headlines_clean.csv')
 urls = df['url'].tolist()
 
 
@@ -21,6 +21,6 @@ def fetch_article_content(url):
         return ""
 
 df['article_text'] = df['url'].apply(fetch_article_content)
-time.sleep(1) # Optionally, add a sleep between requests to be polite!
+time.sleep(10) # Optionally, add a sleep between requests to be polite!
 
-df.to_csv('ndtv_articles.csv', index=False)
+df.to_csv('opindia_articles.csv', index=False)

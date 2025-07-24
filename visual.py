@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import pandas as pd
 
-df = pd.read_csv('ndtv_articles_with_labels.csv')
+df = pd.read_csv('combined_articles_with_labels.csv')
 
 
 
@@ -26,7 +26,7 @@ df = pd.read_csv('ndtv_articles_with_labels.csv')
 
 
 df['label'].value_counts().plot(kind='bar')
-plt.title("Stance Distribution in NDTV Articles")
+plt.title("Stance Distribution in NDTV and OpIndia Articles")
 plt.xlabel("Stance")
 plt.ylabel("Number of Articles")
 plt.show()

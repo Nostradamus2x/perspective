@@ -70,7 +70,7 @@ def preprocess_article(text):
     return ' '.join(tokens)
 
 # --------- LOAD & CLEAN DATA ----------
-df = pd.read_csv('ndtv_articles.csv')
+df = pd.read_csv('opindia_articles.csv')
 
 # Remove rows with blank article_text
 df = df[df['article_text'].notnull() & (df['article_text'].str.strip() != "")]
@@ -80,4 +80,4 @@ tqdm.pandas()
 
 df['cleaned_text'] = df['article_text'].progress_apply(preprocess_article)
 
-df.to_csv('ndtv_articles_cleaned.csv', index=False)
+df.to_csv('opindia_articles_cleaned.csv', index=False)

@@ -8,7 +8,7 @@ from sklearn.metrics import classification_report, confusion_matrix, accuracy_sc
 import numpy as np
 
 # Load your dataframe as needed:
-df = pd.read_csv('ndtv_articles_labeled.csv')
+df = pd.read_csv('combined_articles_labeled.csv')
 
 
 print(df['label'].value_counts(dropna=False))  # Sanity check: Should show classes and NaNs
@@ -64,7 +64,7 @@ df.loc[df['label'].isnull(), 'label'] = unlabeled_pred
 df['label_type'] = np.where(df['label'].notnull() & df.index.isin(labeled_df.index), "manual", "predicted")
 
 # Optional: Save with prediction origin
-df.to_csv('ndtv_articles_with_labels.csv', index=False)
+df.to_csv('combined_articles_with_labels.csv', index=False)
 
 
 # Sanity check
