@@ -91,7 +91,6 @@ newspaper3k==0.2.8
 nltk==3.9.1
 notebook==7.0.7
 notebook_shim==0.2.3
-numpy==2.0.2
 olefile==0.47
 openpyxl==3.1.2
 overrides==7.7.0
