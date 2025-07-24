@@ -6,6 +6,7 @@ from collections import Counter
 import time
 import numpy as np
 from sentence_transformers import SentenceTransformer
+import datetime
 
 app = Flask(__name__)
 
@@ -20,6 +21,11 @@ NEWS_SOURCES = [
     {
         "name": "The Hindu",
         "url": "https://www.thehindu.com/news/national/feeder/default.rss",
+        "bias": "center"
+    },
+    {
+        "name": "NDTV",
+        "url": "https://feeds.feedburner.com/ndtvnews-latest",
         "bias": "center"
     },
     {
@@ -69,6 +75,18 @@ def embed_titles (titles):
     return [EMBED_CACHE[t] for t in titles]
 
 
+def parse_time(entry):
+    # RSS feeds may have 'published_parsed' or 'updated_parsed'
+    time_struct = getattr(entry, "published_parsed", None) or getattr(entry, "updated_parsed", None)
+    if time_struct:
+        # Convert to datetime object
+        dt = datetime.datetime.fromtimestamp(time.mktime(time_struct))
+        # Format as "23 Jul 2025, 09:41 PM" (optional)
+        return dt.strftime("%d %b %Y, %I:%M %p")
+    else:
+        # Fallback: try 'published' or 'updated' string, or None
+        return getattr(entry, "published", None) or getattr(entry, "updated", None) or ""
+
 @cache.cached(key_prefix="news_data")    
 def fetch_and_process_articles():
     # now = time.time()
@@ -84,13 +102,14 @@ def fetch_and_process_articles():
     for source in NEWS_SOURCES:
         try:
             feed = feedparser.parse(source["url"])
-            for entry in feed.entries[:50]:  # Limit to 10 per source
+            for entry in feed.entries[:40]:  # Limit to 10 per source
                 article = {
                     "title": entry.title,
                     "link": entry.link,
                     "source": source["name"],
                     "bias": source["bias"],
-                    "clean_title": clean_title(entry.title)
+                    "clean_title": clean_title(entry.title),
+                    "datetime": parse_time(entry)
                 }
                 articles_by_bias[source["bias"]].append(article)
                 all_articles.append(article)
