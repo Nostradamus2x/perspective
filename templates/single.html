@@ -3,129 +3,160 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Single — one story, several outlets</title>
+    <title>Single — weekly TV coverage digest</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg: #f5f6fa; --card: #fff; --ink: #262a36; --muted: #6b7280;
-            --line: #e5e7eb; --accent: #1b4ba0;
+            --bg:#f5f6fa; --card:#fff; --ink:#262a36; --muted:#6b7280;
+            --line:#e5e7eb; --accent:#1b4ba0; --event:#7c3aed; --topic:#0891b2;
         }
-        * { box-sizing: border-box; }
-        body { font-family: 'Inter', Arial, sans-serif; background: var(--bg);
-               color: var(--ink); margin: 0; padding: 0 16px 64px; }
-        header { max-width: 900px; margin: 0 auto; padding: 32px 0 8px; }
-        h1 { font-size: 1.6em; font-weight: 700; margin: 0 0 6px; }
-        .lede { color: var(--muted); font-size: 0.92em; margin: 0 0 4px; line-height: 1.5; }
-        .params { color: var(--muted); font-size: 0.8em; font-variant-numeric: tabular-nums; }
-        .bar { max-width: 900px; margin: 16px auto 0; display: flex;
-               justify-content: space-between; align-items: center; gap: 12px; }
-        button { font-family: inherit; font-size: 0.85em; font-weight: 500;
-                 border: 1px solid var(--line); background: var(--card);
-                 color: var(--ink); border-radius: 7px; padding: 7px 14px; cursor: pointer; }
-        button:hover { border-color: var(--accent); color: var(--accent); }
-        .story { max-width: 900px; margin: 20px auto; background: var(--card);
-                 border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px; }
-        .story-head { display: flex; justify-content: space-between;
-                      align-items: baseline; gap: 12px; flex-wrap: wrap;
-                      border-bottom: 1px solid var(--line); padding-bottom: 12px; margin-bottom: 4px; }
-        .coverage { font-weight: 700; font-size: 1.05em; }
-        .metrics { color: var(--muted); font-size: 0.78em; font-variant-numeric: tabular-nums; }
-        .item { padding: 16px 0; border-bottom: 1px solid var(--line); }
-        .item:last-child { border-bottom: none; padding-bottom: 4px; }
-        .src { display: inline-block; font-size: 0.72em; font-weight: 600;
-               letter-spacing: 0.4px; text-transform: uppercase; color: var(--muted);
-               border: 1px solid var(--line); border-radius: 5px; padding: 2px 7px; margin-bottom: 8px; }
-        .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; }
-        .b-left { background: #ec6565; } .b-center { background: #3579db; }
-        .b-right { background: #53b47a; } .b-factcheck { background: #239797; }
-        .item a { display: block; color: var(--accent); font-weight: 500;
-                  text-decoration: none; line-height: 1.45; margin-bottom: 4px; }
-        .item a:hover { text-decoration: underline; }
-        .when { color: var(--muted); font-size: 0.76em; font-variant-numeric: tabular-nums; }
-        form { margin-top: 10px; }
-        textarea { width: 100%; min-height: 68px; font-family: inherit; font-size: 0.88em;
-                   line-height: 1.5; color: var(--ink); border: 1px solid var(--line);
-                   border-radius: 7px; padding: 9px 11px; resize: vertical; background: #fcfcfd; }
-        textarea:focus { outline: none; border-color: var(--accent); background: #fff; }
-        .actions { display: flex; align-items: center; gap: 10px; margin-top: 7px; }
-        .saved-tag { color: #15803d; font-size: 0.76em; font-weight: 500; }
-        .empty { max-width: 900px; margin: 20px auto; background: var(--card);
-                 border: 1px solid var(--line); border-radius: 12px; padding: 28px 22px; }
-        .empty h2 { font-size: 1.05em; margin: 0 0 10px; }
-        .empty p { color: var(--muted); font-size: 0.88em; line-height: 1.6; margin: 0 0 8px; }
-        @media (max-width: 640px) { .story { padding: 16px; } h1 { font-size: 1.3em; } }
+        * { box-sizing:border-box; }
+        body { font-family:'Inter',Arial,sans-serif; background:var(--bg); color:var(--ink);
+               margin:0; padding:0 16px 64px; }
+        .wrap { max-width:940px; margin:0 auto; }
+        header { padding:32px 0 6px; }
+        h1 { font-size:1.6em; font-weight:700; margin:0 0 6px; }
+        .lede { color:var(--muted); font-size:0.92em; margin:0 0 8px; line-height:1.55; }
+        .params { color:var(--muted); font-size:0.79em; font-variant-numeric:tabular-nums; }
+        .bar { display:flex; justify-content:space-between; align-items:center;
+               gap:12px; margin:14px 0 4px; }
+        button { font-family:inherit; font-size:0.85em; font-weight:500; border:1px solid var(--line);
+                 background:var(--card); color:var(--ink); border-radius:7px; padding:7px 14px; cursor:pointer; }
+        button:hover { border-color:var(--accent); color:var(--accent); }
+        h2.tier { font-size:0.78em; font-weight:700; letter-spacing:0.9px; text-transform:uppercase;
+                  margin:34px 0 4px; }
+        h2.tier.e { color:var(--event); }
+        h2.tier.t { color:var(--topic); }
+        .tier-note { color:var(--muted); font-size:0.83em; margin:0 0 12px; line-height:1.5; }
+        .story { background:var(--card); border:1px solid var(--line); border-radius:12px;
+                 padding:18px 20px; margin-bottom:16px; border-left:4px solid var(--line); }
+        .story.e { border-left-color:var(--event); }
+        .story.t { border-left-color:var(--topic); }
+        .story-head { display:flex; justify-content:space-between; align-items:baseline; gap:12px;
+                      flex-wrap:wrap; border-bottom:1px solid var(--line); padding-bottom:11px; }
+        .coverage { font-weight:700; font-size:1.02em; }
+        .metrics { color:var(--muted); font-size:0.76em; font-variant-numeric:tabular-nums; }
+        .item { padding:15px 0; border-bottom:1px solid var(--line); }
+        .item:last-child { border-bottom:none; padding-bottom:2px; }
+        .chan { display:inline-block; font-size:0.7em; font-weight:600; letter-spacing:0.4px;
+                text-transform:uppercase; color:var(--muted); border:1px solid var(--line);
+                border-radius:5px; padding:2px 7px; margin-bottom:7px; }
+        .item a.title { display:block; color:var(--accent); font-weight:500; text-decoration:none;
+                        line-height:1.45; margin-bottom:3px; }
+        .item a.title:hover { text-decoration:underline; }
+        .when { color:var(--muted); font-size:0.75em; font-variant-numeric:tabular-nums; }
+        details { margin:8px 0 0; }
+        summary { cursor:pointer; font-size:0.78em; color:var(--muted); user-select:none; }
+        summary:hover { color:var(--accent); }
+        .transcript { margin-top:8px; padding:11px 13px; background:#fafafb; border:1px solid var(--line);
+                      border-radius:7px; font-size:0.83em; line-height:1.65; color:#3f4655;
+                      max-height:280px; overflow-y:auto; white-space:pre-wrap; }
+        form { margin-top:9px; }
+        textarea { width:100%; min-height:62px; font-family:inherit; font-size:0.87em; line-height:1.5;
+                   color:var(--ink); border:1px solid var(--line); border-radius:7px; padding:9px 11px;
+                   resize:vertical; background:#fcfcfd; }
+        textarea:focus { outline:none; border-color:var(--accent); background:#fff; }
+        .actions { display:flex; align-items:center; gap:10px; margin-top:6px; }
+        .saved-tag { color:#15803d; font-size:0.75em; font-weight:500; }
+        .empty { background:var(--card); border:1px solid var(--line); border-radius:12px;
+                 padding:26px 22px; }
+        .empty p { color:var(--muted); font-size:0.88em; line-height:1.6; margin:0 0 8px; }
+        code { font-size:0.9em; background:#f1f2f6; padding:1px 5px; border-radius:4px; }
+        @media (max-width:640px) { .story { padding:15px; } h1 { font-size:1.3em; } }
     </style>
 </head>
 <body>
+<div class="wrap">
 <header>
     <h1>Single</h1>
     <p class="lede">
-        Stories that more than one outlet covered — matched on headline meaning
-        <em>and</em> publication time, because similarity alone can't tell
-        &ldquo;same story&rdquo; from &ldquo;same person, six months apart.&rdquo;
+        Stories from the last {{ window }} days that more than one English TV channel covered.
+        Matched on segment titles and publication time, across {{ channels }} channels.
     </p>
     <p class="params">
-        min pairwise similarity &ge; {{ '%.2f'|format(min_similarity) }}
-        &middot; published within {{ max_span }}h
-        &middot; {{ total_sources }} sources polled
-        &middot; {{ saved }} comment{{ '' if saved == 1 else 's' }} saved
+        {{ total }} segments in window
+        &middot; {{ stats.usable }} usable of {{ stats.videos }} fetched
+        &middot; {{ stats.live }} live skipped
+        &middot; {{ stats.unavailable }} no captions
+        {%- if stats.pending %} &middot; {{ stats.pending }} pending{% endif %}
+        &middot; {{ stats.comments }} note{{ '' if stats.comments == 1 else 's' }}
     </p>
 </header>
 
 <div class="bar">
-    <span class="params">Feeds cached 10 minutes.</span>
-    <form method="post" action="{{ url_for('refresh') }}" style="margin:0">
-        <button type="submit">Refresh feeds</button>
+    <span class="params">Digest cached 30 min. Run <code>tv_ingest.py</code> to pull new segments.</span>
+    <form method="post" action="{{ url_for('recluster') }}" style="margin:0">
+        <button type="submit">Recluster</button>
     </form>
 </div>
 
-{% if not clusters %}
+{% if not events and not topics %}
 <div class="empty">
-    <h2>No story cleared the bar right now.</h2>
-    <p>Nothing in the current feed window was covered by two or more outlets
-       closely enough in both meaning and time. That is a real answer, not a failure —
-       it happens often, because the feeds hold very different spans: The Hindu
-       carries about 6 hours, Altnews about 307.</p>
-    <p>Try refreshing later, or widen the window in
-       <code>common_story.py</code> (<code>MIN_SIMILARITY</code>,
-       <code>MAX_SPAN_HOURS</code>) — though loosening the floor mostly admits
-       false matches rather than finding real ones.</p>
+    <p>No story in the window was covered by two or more channels.</p>
+    <p>If <code>{{ stats.usable }}</code> usable segments looks low, ingestion may still be
+       running &mdash; transcripts are fetched in batches of 500 per run, so a full week
+       takes several passes of <code>venv/bin/python tv_ingest.py --days 7</code>.</p>
 </div>
 {% endif %}
 
-{% for cluster in clusters %}
-{% set ci = loop.index %}
-<div class="story" id="story-{{ ci }}">
+{% macro story_block(cluster, ci, tier) %}
+<div class="story {{ tier }}" id="{{ tier }}-{{ ci }}">
     <div class="story-head">
-        <span class="coverage">{{ cluster.coverage }} of {{ total_sources }} sources covered this</span>
+        <span class="coverage">{{ cluster.coverage }} channels covered this</span>
         <span class="metrics">
             min similarity {{ '%.3f'|format(cluster.min_similarity) }}
             &middot; spread over {{ '%.1f'|format(cluster.span_hours) }}h
         </span>
     </div>
-
-    {% for article in cluster.articles %}
-    {% set anchor = 'story-' ~ ci ~ '-' ~ loop.index %}
+    {% for s in cluster.segments %}
+    {% set anchor = tier ~ '-' ~ ci ~ '-' ~ loop.index %}
     <div class="item" id="{{ anchor }}">
-        <span class="src"><span class="dot b-{{ article.bias }}"></span>{{ article.source }}</span>
-        <a href="{{ article.url }}" target="_blank" rel="noopener">{{ article.title }}</a>
-        <span class="when">{{ article.when }}</span>
+        <span class="chan">{{ s.channel }}</span>
+        <a class="title" href="{{ s.url }}" target="_blank" rel="noopener">{{ s.title }}</a>
+        <span class="when">{{ s.when }}</span>
+
+        {% if s.transcript %}
+        <details>
+            <summary>Transcript &mdash; {{ '{:,}'.format(s.transcript|length) }} chars</summary>
+            <div class="transcript">{{ s.transcript }}</div>
+        </details>
+        {% endif %}
 
         <form method="post" action="{{ url_for('comment') }}">
-            <input type="hidden" name="url" value="{{ article.url }}">
-            <input type="hidden" name="source" value="{{ article.source }}">
-            <input type="hidden" name="headline" value="{{ article.title }}">
+            <input type="hidden" name="video_id" value="{{ s.video_id }}">
+            <input type="hidden" name="channel" value="{{ s.channel }}">
+            <input type="hidden" name="title" value="{{ s.title }}">
             <input type="hidden" name="anchor" value="{{ anchor }}">
             <textarea name="comment"
-                      placeholder="How did {{ article.source }} frame this?">{{ comments.get(article.url, '') }}</textarea>
+                      placeholder="How did {{ s.channel }} frame this?">{{ comments.get(s.video_id, '') }}</textarea>
             <div class="actions">
                 <button type="submit">Save</button>
-                {% if comments.get(article.url) %}<span class="saved-tag">saved</span>{% endif %}
+                {% if comments.get(s.video_id) %}<span class="saved-tag">saved</span>{% endif %}
             </div>
         </form>
     </div>
     {% endfor %}
 </div>
-{% endfor %}
+{% endmacro %}
+
+{% if events %}
+<h2 class="tier e">Same event</h2>
+<p class="tier-note">
+    The same specific incident, reported by several channels within 48h.
+    Similarity &ge; {{ '%.2f'|format(event_floor) }} on every pair.
+</p>
+{% for c in events %}{{ story_block(c, loop.index, 'e') }}{% endfor %}
+{% endif %}
+
+{% if topics %}
+<h2 class="tier t">Same running story</h2>
+<p class="tier-note">
+    One ongoing story covered from different angles across the week &mdash; the channels
+    are not reporting an identical incident. Similarity &ge; {{ '%.2f'|format(topic_floor) }}.
+    This tier is where a developing story like a war shows up; the event threshold rejects it.
+</p>
+{% for c in topics %}{{ story_block(c, loop.index, 't') }}{% endfor %}
+{% endif %}
+</div>
 </body>
 </html>

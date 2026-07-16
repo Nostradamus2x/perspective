@@ -1,7 +1,10 @@
-"""Web UI: one story, several outlets, a comment box per outlet.
+"""Weekly digest UI: TV stories covered by several channels, with notes.
 
-Kept separate from app.py so the existing site keeps running unchanged.
-Run on a different port:  python app_single.py
+    venv/bin/python tv_ingest.py --days 7   # populate first
+    venv/bin/python app_single.py           # then serve on :8081
+
+Reads only from SQLite. Ingestion is a separate step because fetching a week of
+transcripts takes minutes and must not happen inside a request.
 """
 
 from flask import Flask, redirect, render_template, request, url_for
@@ -9,55 +12,61 @@ from flask_caching import Cache
 
 import common_story
 import store
+import tv_ingest
 
 app = Flask(__name__)
 app.config["CACHE_TYPE"] = "filesystem"
 app.config["CACHE_DIR"] = "flask_cache_single"
-app.config["CACHE_DEFAULT_TIMEOUT"] = 10 * 60
+app.config["CACHE_DEFAULT_TIMEOUT"] = 30 * 60
 cache = Cache(app)
 
 store.init()
 
+WINDOW_DAYS = 7
 
-@cache.cached(key_prefix="single_clusters")
-def load_clusters():
-    return common_story.top_stories(limit=5)
+
+@cache.cached(key_prefix="digest")
+def load_digest():
+    return common_story.weekly_digest(days=WINDOW_DAYS, limit=5)
 
 
 @app.route("/")
 def index():
-    clusters = load_clusters()
-    urls = [a.url for c in clusters for a in c.articles]
+    events, topics, total = load_digest()
+    ids = [s.video_id for c in events + topics for s in c.segments]
     return render_template(
         "single.html",
-        clusters=clusters,
-        comments=store.comments_for(urls),
-        total_sources=len(common_story.SOURCES),
-        min_similarity=common_story.MIN_SIMILARITY,
-        max_span=common_story.MAX_SPAN_HOURS,
-        saved=store.count(),
+        events=events,
+        topics=topics,
+        total=total,
+        window=WINDOW_DAYS,
+        comments=store.comments_for(ids),
+        stats=store.stats(),
+        event_floor=common_story.EVENT_SIMILARITY,
+        topic_floor=common_story.TOPIC_SIMILARITY,
+        channels=len(tv_ingest.CHANNELS),
     )
 
 
 @app.route("/comment", methods=["POST"])
 def comment():
     store.save_comment(
-        request.form["url"],
-        request.form["source"],
-        request.form["headline"],
+        request.form["video_id"],
+        request.form["channel"],
+        request.form["title"],
         request.form.get("comment", ""),
     )
     return redirect(url_for("index") + f"#{request.form['anchor']}")
 
 
-@app.route("/refresh", methods=["POST"])
-def refresh():
-    cache.delete("single_clusters")
+@app.route("/recluster", methods=["POST"])
+def recluster():
+    cache.delete("digest")
     return redirect(url_for("index"))
 
 
 if __name__ == "__main__":
-    # Load the model before serving so the first request isn't a 10s stall.
+    # Load the model before serving so the first request is not a 10s stall.
     common_story.get_model()
     # debug=True must stay off: the reloader re-imports this module and torch
     # then raises "Cannot copy out of meta tensor" on the next encode.

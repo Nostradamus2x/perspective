@@ -1,47 +1,69 @@
-"""Find one story covered by several outlets at once.
+"""Group TV news segments that covered the same story.
 
-Two articles count as the same story only if they are both semantically close
-AND published close together in time. Similarity alone is not enough: in
-testing, "Pappu Yadav humiliated at opposition rally" (OpIndia) and "Pappu
-Yadav's Supporters Block Roads" (NDTV) scored 0.686 despite being different
-events six months apart -- the same score as a genuine same-day match. Time is
-what separates the two cases.
+Reads what tv_ingest.py cached; does not fetch. Emits two tiers:
+
+  EVENT tier  -- the same specific incident, reported by several channels
+  TOPIC tier  -- one ongoing story, covered from different angles
+
+Both tiers matter because they answer different questions. In a live sample,
+five channels ran Iran-war segments -- a missile-arsenal explainer, a drone
+shootdown, blasts on Hengam Island, the Strait of Hormuz, an interview. At the
+event threshold that whole cluster is rejected as "not the same story", and the
+digest surfaces a two-channel NASA press release instead. The war is the story
+worth writing about; the event tier alone cannot see it.
+
+Matching is on TITLES, not transcripts. Measured over 1,067 cross-channel pairs:
+
+    TITLES       median 0.149 | p90 0.306 | p99 0.621 | max 0.939
+    TRANSCRIPTS  median 0.183 | p90 0.416 | p99 0.683 | max 0.858
+
+Titles separate signal from noise by 6.3x, transcripts only 4.7x. Transcripts
+share news-register filler -- anchor intros, "joining us now", ad reads -- which
+lifts the floor, and the model reads only the first ~1,536 chars of one anyway.
+Transcripts are still stored: they are what you read and write about.
 """
 
 import calendar
+import re
 import time
 from dataclasses import dataclass
 from itertools import combinations
-from urllib.parse import urlsplit, urlunsplit
 
-import feedparser
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
-SOURCES = [
-    ("The Hindu", "https://www.thehindu.com/news/national/feeder/default.rss", "center"),
-    ("NDTV", "https://feeds.feedburner.com/ndtvnews-latest", "center"),
-    ("Scroll.in", "https://feeds.feedburner.com/ScrollinArticles.rss", "left"),
-    ("OpIndia", "https://www.opindia.com/feed/", "right"),
-    ("Altnews", "https://www.altnews.in/feed/", "factcheck"),
-]
+import store
 
 MODEL_NAME = "all-mpnet-base-v2"
-PER_SOURCE = 40
 
-# Calibrated against pairs verified by hand:
-#   0.686  IRCTC booking site       NDTV/OpIndia    same story
-#   0.614  Wangchuk hunger strike   Hindu/Scroll    same story
-#   0.588  two unrelated murders    Hindu/NDTV      same genre, different event
-# Real matches sit at 0.61+; by 0.59 the matcher is pairing genre, not event.
-MIN_SIMILARITY = 0.60
+# Calibrated by reading every cross-channel pair above 0.55:
+#   0.939  ISS astronaut Anil Menon        CNN-News18 + Republic   same event
+#   0.904  Tamil Nadu custodial death      NewsX + India Today     same event
+#   0.684  'Republic of Balochistan' video Republic + NewsX        same event
+#   0.667  missile arsenal / Amirahmadi    WION + India Today      SAME WAR, different segments
+# The true/false boundary sits in a 0.017 gap -- tighter than the 0.60 that
+# works for newspaper headlines, because TV titles share formulaic prefixes
+# ("US-Iran War:", "Iran News |") that inflate similarity between unrelated
+# segments. clean_title() strips those before encoding to widen it.
+EVENT_SIMILARITY = 0.68
+TOPIC_SIMILARITY = 0.60
 
-# The Hindu publishes ~10 articles/hour and its feed holds only ~6 hours, while
-# Altnews holds ~307. Widening this does not find more stories, it just admits
-# same-entity false positives.
-MAX_SPAN_HOURS = 48
+# A single incident is reported within a couple of days. A running story is not,
+# so the topic tier gets the whole window.
+EVENT_SPAN_HOURS = 48
+TOPIC_SPAN_HOURS = 24 * 7
 
 _model = None
+
+# Channel branding and hype markers, stripped because they are constant across
+# every segment a channel posts -- similarity that carries no signal.
+_NOISE = re.compile(
+    r"\b(LIVE|WATCH|BREAKING|EXCLUSIVE|LATEST|FULL VIDEO|Latest News|"
+    r"News LIVE|English News|Top Headlines?|NewsX|WION|Republic|India Today|"
+    r"CNN[- ]?News18)\b", re.I)
+
+# A leading "Topic: " label, e.g. "US-Iran War: Inside Tehran's ..."
+_LABEL = re.compile(r"^[A-Za-z0-9'\-\s&]{3,28}:\s+")
 
 
 def get_model():
@@ -51,95 +73,85 @@ def get_model():
     return _model
 
 
-def normalise_url(url):
-    """Strip query and fragment so the same article dedupes across polls.
+def clean_title(title):
+    """Strip channel branding and topic labels from a video title.
 
-    Scroll serves ?utm_source=rss and NDTV appends #pfrom= fragments, so the
-    raw URL is not stable between fetches.
+    Takes the longest pipe-delimited segment rather than the first. Titles put
+    the substance in either position -- "US-Iran War: Inside Tehran's Missile
+    Arsenal | WION" leads with it, "US-IRAN WAR | Trump Declares EMERGENCY"
+    trails with it -- and taking the first turns the second into "US-IRAN WAR",
+    which is the noise with the story removed.
     """
-    if not isinstance(url, str) or not url.strip():
-        return None
-    parts = urlsplit(url.strip())
-    return urlunsplit((parts.scheme.lower(), parts.netloc.lower(),
-                       parts.path.rstrip("/"), "", ""))
-
-
-def published_utc(entry):
-    """Epoch seconds, or None.
-
-    feedparser always hands back published_parsed in UTC. time.mktime() reads a
-    struct as local time, so app.py's parse_time() is wrong by the local UTC
-    offset (5 hours on this machine). calendar.timegm() is the UTC counterpart.
-    """
-    parsed = getattr(entry, "published_parsed", None) or getattr(entry, "updated_parsed", None)
-    return calendar.timegm(parsed) if parsed else None
+    parts = [p.strip() for p in title.split("|") if p.strip()]
+    text = max(parts, key=len) if parts else title
+    text = _NOISE.sub("", text)
+    text = _LABEL.sub("", text, count=1)
+    text = re.sub(r"\s+", " ", text).strip(" :;-,")
+    # If stripping ate the whole title, the original beats nothing.
+    return text if len(text) >= 12 else re.sub(r"\s+", " ", title).strip()
 
 
 @dataclass
-class Article:
-    source: str
-    bias: str
+class Segment:
+    video_id: str
+    channel: str
     title: str
     url: str
     published: float
+    transcript: str
 
     @property
     def when(self):
-        return time.strftime("%d %b %Y, %H:%M UTC", time.gmtime(self.published))
+        return time.strftime("%d %b, %H:%M UTC", time.gmtime(self.published))
+
+    @property
+    def match_text(self):
+        return clean_title(self.title)
 
 
 @dataclass
 class Cluster:
-    articles: list
+    segments: list
     min_similarity: float
+    tier: str
 
     @property
     def coverage(self):
-        return len(self.articles)
+        return len({s.channel for s in self.segments})
 
     @property
     def span_hours(self):
-        stamps = [a.published for a in self.articles]
+        stamps = [s.published for s in self.segments]
         return (max(stamps) - min(stamps)) / 3600
 
 
-def fetch_articles(per_source=PER_SOURCE):
-    """Pull the current window from every feed. Articles without a usable
-    timestamp are dropped -- they cannot be time-checked, and admitting them
-    would reintroduce the false positives the time filter exists to stop."""
-    articles = []
-    for name, url, bias in SOURCES:
-        feed = feedparser.parse(url)
-        for entry in feed.entries[:per_source]:
-            stamp = published_utc(entry)
-            link = normalise_url(entry.get("link"))
-            if stamp is None or not link or not entry.get("title"):
-                continue
-            articles.append(Article(name, bias, entry.title.strip(), link, stamp))
-    return articles
+def load_segments(days=7):
+    out = []
+    for row in store.segments_since(days):
+        stamp = calendar.timegm(time.strptime(row["published"], "%Y-%m-%dT%H:%M:%SZ"))
+        out.append(Segment(row["video_id"], row["channel"], row["title"],
+                           row["url"], stamp, row["transcript"]))
+    return out
 
 
-def embed(articles):
-    vectors = get_model().encode([a.title for a in articles],
+def embed(segments):
+    vectors = get_model().encode([s.match_text for s in segments],
                                  normalize_embeddings=True,
                                  show_progress_bar=False)
     return np.asarray(vectors)
 
 
-def _grow(seed, sim, articles, min_similarity, max_span):
-    """Greedily extend a seed article with one article per other source,
-    keeping every pairwise similarity above the floor and the whole group
-    inside the time window."""
+def _grow(seed, sim, segments, floor, max_span):
     group = [seed]
-    sources = {articles[seed].source}
+    channels = {segments[seed].channel}
     while True:
         best_score, best_idx = None, None
-        for j in range(len(articles)):
-            if articles[j].source in sources:
+        for j in range(len(segments)):
+            if segments[j].channel in channels:
                 continue
-            if any(sim[j, g] < min_similarity for g in group):
+            if any(sim[j, g] < floor for g in group):
                 continue
-            stamps = [articles[g].published for g in group] + [articles[j].published]
+            stamps = [segments[g].published for g in group] + [segments[j].published]
             if (max(stamps) - min(stamps)) / 3600 > max_span:
                 continue
             score = min(sim[j, g] for g in group)
@@ -148,58 +160,67 @@ def _grow(seed, sim, articles, min_similarity, max_span):
         if best_idx is None:
             return group
         group.append(best_idx)
-        sources.add(articles[best_idx].source)
+        channels.add(segments[best_idx].channel)
 
 
-def find_clusters(articles, vectors, min_similarity=MIN_SIMILARITY,
-                  max_span=MAX_SPAN_HOURS, limit=5):
-    """Stories ranked by how many outlets covered them, then by how tightly.
+def find_clusters(segments, vectors, floor, max_span, tier, limit=5, exclude=()):
+    """Stories ranked by channel coverage, then by tightness.
 
-    Scored on the *minimum* pairwise similarity, not the mean. A mean lets two
-    real matches launder three unrelated headlines into a passing group -- which
-    is how app.py currently pairs a Kashmir editorial with a Noida building fire
-    and calls it the story of the day.
+    Scored on the MINIMUM pairwise similarity, never the mean. A mean lets two
+    real matches launder three unrelated segments into a passing group. If the
+    claim is "these channels all covered one story", every pair must hold.
     """
-    if not articles:
+    if not segments:
         return []
     sim = vectors @ vectors.T
+    blocked = set(exclude)
 
     candidates = []
-    for seed in range(len(articles)):
-        group = _grow(seed, sim, articles, min_similarity, max_span)
-        if len(group) < 2:
+    for seed in range(len(segments)):
+        if segments[seed].video_id in blocked:
             continue
-        floor = min(sim[a, b] for a, b in combinations(group, 2))
-        candidates.append((len(group), float(floor), sorted(group)))
+        group = [i for i in _grow(seed, sim, segments, floor, max_span)
+                 if segments[i].video_id not in blocked]
+        if len({segments[i].channel for i in group}) < 2:
+            continue
+        low = min(sim[a, b] for a, b in combinations(group, 2))
+        candidates.append((len({segments[i].channel for i in group}), float(low), group))
 
     candidates.sort(key=lambda c: (-c[0], -c[1]))
 
     clusters, claimed = [], set()
-    for _, floor, group in candidates:
+    for _, low, group in candidates:
         if any(i in claimed for i in group):
             continue
         claimed.update(group)
-        clusters.append(Cluster([articles[i] for i in group], floor))
+        clusters.append(Cluster([segments[i] for i in group], low, tier))
         if len(clusters) >= limit:
             break
     return clusters
 
 
-def top_stories(limit=5):
-    articles = fetch_articles()
-    if not articles:
-        return []
-    return find_clusters(articles, embed(articles), limit=limit)
+def weekly_digest(days=7, limit=5):
+    """Event-tier clusters first, then topic-tier over what is left."""
+    segments = load_segments(days)
+    if not segments:
+        return [], [], 0
+    vectors = embed(segments)
+    events = find_clusters(segments, vectors, EVENT_SIMILARITY,
+                           EVENT_SPAN_HOURS, "event", limit)
+    used = {s.video_id for c in events for s in c.segments}
+    topics = find_clusters(segments, vectors, TOPIC_SIMILARITY,
+                           TOPIC_SPAN_HOURS, "topic", limit, exclude=used)
+    return events, topics, len(segments)
 
 
 if __name__ == "__main__":
-    found = top_stories()
-    if not found:
-        print("No story cleared the bar.")
-    for n, cluster in enumerate(found, 1):
-        print(f"\n[{n}] {cluster.coverage} of {len(SOURCES)} sources "
-              f"| min similarity {cluster.min_similarity:.3f} "
-              f"| span {cluster.span_hours:.1f}h")
-        for article in cluster.articles:
-            print(f"    {article.source:11} {article.title[:70]}")
-            print(f"    {'':11} {article.when}")
+    events, topics, total = weekly_digest()
+    print(f"{total} segments in window\n")
+    for label, clusters in (("EVENT", events), ("TOPIC", topics)):
+        print(f"=== {label} tier: {len(clusters)} stories ===")
+        for n, c in enumerate(clusters, 1):
+            print(f"\n[{n}] {c.coverage} channels | min {c.min_similarity:.3f} "
+                  f"| span {c.span_hours:.1f}h")
+            for s in c.segments:
+                print(f"    {s.channel:12} {s.title[:66]}")
+        print()

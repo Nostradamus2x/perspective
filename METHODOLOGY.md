@@ -1,222 +1,276 @@
 # Methodology — `single`
 
-A tool for finding one news story that several Indian outlets covered at the same
-time, and annotating how each outlet framed it.
+A weekly digest of stories that several English Indian TV channels covered, with
+per-channel transcripts and a notes field. Built to feed a weekly Substack column
+about how broadcasters frame the same story differently.
 
-Every number in this document was measured against the live feeds on 15 Jul 2026,
-not estimated. Where a design choice was made, the measurement that forced it is
-given.
+TV only. No newspapers.
+
+Every number here was measured against live data, not estimated. Where a design
+choice was made, the measurement that forced it is given. Several of these
+measurements overturned an earlier conclusion in this document's own history;
+those reversals are recorded rather than quietly edited out, because the way they
+failed is the useful part.
 
 ---
 
-## 1. What the tool does
+## 1. Pipeline
 
-1. Polls five RSS feeds (40 articles each).
-2. Embeds every **headline** into a vector.
-3. Groups articles that are both semantically close **and** published close together.
-4. Ranks groups by how many outlets covered the story.
-5. Renders one comment box per outlet, persisted to SQLite.
-
-Entry points:
+```
+YouTube Data API  ->  SQLite  ->  transcripts  ->  cluster (2 tiers)  ->  Flask
+   tv_ingest.py       store.py    tv_ingest.py     common_story.py      app_single.py
+```
 
 | File | Role |
 | --- | --- |
-| `common_story.py` | Fetching, matching, clustering. Runnable standalone. |
-| `store.py` | SQLite comment persistence. |
+| `tv_ingest.py` | YouTube API + transcript fetch into SQLite. Idempotent; rerun freely. |
+| `store.py` | SQLite: `videos`, `comments`. |
+| `common_story.py` | Two-tier clustering. Reads the DB, never fetches. |
 | `app_single.py` | Flask UI, port 8081. |
-| `templates/single.html` | The page. |
+
+```bash
+venv/bin/python tv_ingest.py --days 7    # populate (minutes; rerun for pending)
+venv/bin/python app_single.py            # serve :8081
+```
+
+Ingestion is a separate step because a week of transcripts takes minutes to
+fetch. It must never happen inside a request.
 
 ---
 
-## 2. Sources
+## 2. Channels
 
-| Source | Bias tag | Publication rate | Feed depth |
+| Channel | Status |
+| --- | --- |
+| CNN-News18 | ✅ 6/8 non-live had transcripts |
+| WION | ✅ 7/8 |
+| Republic | ✅ 4/8 |
+| NewsX | ✅ 8/8 |
+| India Today | ✅ 5/8 |
+| **Times Now** | ❌ **0/8 — captions disabled at channel level** |
+
+Times Now is excluded permanently. Captions are the uploader's setting; no API
+key, account, or permission enables them on someone else's channel.
+
+Channel IDs are resolved via the Data API's `search` endpoint, **not** by
+scraping `@handles`. Handle scraping produced two wrong answers: `@MirrorNow`
+returned Times Now's channel ID, and `@RepublicWorld` returned a Republic channel
+that had not posted in 84 days. Both were silently wrong and would have poisoned
+everything downstream.
+
+Volume is large — 2,958 videos across 5 channels in **3 days**, India Today alone
+posting ~295/day.
+
+---
+
+## 3. Live streams must be filtered, and this is not a detail
+
+News channels stream constantly. **Live streams have no captions.**
+
+```
+India Today:  32 of 50 recent uploads were live
+Republic:     18 of 50
+CNN-News18:   27 of 50
+```
+
+`tv_ingest.py` stores live videos flagged and the matcher ignores them.
+
+**This is the single biggest trap in the whole tool.** An earlier version of this
+document concluded that four of six channels disabled captions, and that TV-only
+was therefore dead. That conclusion was false. It came from sampling each
+channel's *five most recent uploads*, which for a news channel are
+overwhelmingly live streams. The measurement was of "recently live," recorded as
+"captions disabled."
+
+Re-testing against non-live uploads only, five of six channels work.
+
+### The API's `caption` field cannot be used for this
+
+`videos.list` returns `contentDetails.caption`. It is useless here:
+
+```
+India Today: API reports caption=true on 0 of 50 uploads
+             ...while transcripts fetch successfully from that channel
+```
+
+The field only counts **manually uploaded** caption tracks. It is blind to the
+auto-generated ASR captions this tool actually uses. Trusting it nearly
+confirmed the live-stream error a second time, from an independent direction.
+
+The only reliable test is to try the fetch.
+
+---
+
+## 4. Titles, not transcripts
+
+Matching runs on segment **titles**. Transcripts are stored, displayed, and are
+what you read — but they are not what the matcher compares.
+
+Measured over 1,067 cross-channel pairs:
+
+| Corpus | median | p90 | p99 | max | signal/noise |
+| --- | --- | --- | --- | --- | --- |
+| **Titles** | 0.149 | 0.306 | 0.621 | 0.939 | **6.3×** |
+| Transcripts | 0.183 | 0.416 | 0.683 | 0.858 | 4.7× |
+
+Titles win on both ends: lower noise floor, higher ceiling. Transcripts share
+news-register filler — anchor intros, "joining us now", ad reads — which lifts
+the floor without adding signal. And `all-mpnet-base-v2` caps at 384 tokens
+(~1,536 chars), so on a median 2,171-char transcript the model reads about 66%
+regardless.
+
+This reverses an earlier judgement. Titles were first dismissed as SEO noise that
+bundles stories — `"Iran's Electronic Warfare | India-UK FTA | Anil Menon's ISS
+Mission"` is one video covering three unrelated stories. That is true **of live
+bulletins**. Non-live per-story segments carry clean, entity-rich titles. Once
+live streams are filtered, the objection disappears with them.
+
+### Title cleaning
+
+`clean_title()` takes the **longest** pipe-delimited segment, not the first, then
+strips channel branding and a leading `Topic:` label.
+
+Longest, because titles put the substance in either position:
+
+```
+"US-Iran War: Inside Tehran's Missile Arsenal | WION"   -> substance first
+"US-IRAN WAR | Trump Declares EMERGENCY From Whitehouse" -> substance second
+```
+
+An earlier cleaner took text before the first pipe and turned the second into
+`"US-IRAN WAR"` — the noise, with the story deleted.
+
+---
+
+## 5. Two tiers
+
+Both are emitted, ranked separately, because they answer different questions.
+
+| Tier | Floor | Window | Question |
 | --- | --- | --- | --- |
-| The Hindu | center | ~10.0 articles/hour | 60 entries ≈ **6.0 hours** |
-| NDTV | center | ~7.5 articles/hour | 100 entries ≈ 13.4 hours |
-| Scroll.in | left | ~1.0 articles/hour | 100 entries ≈ 98.5 hours |
-| OpIndia | right | ~0.4 articles/hour | 10 entries ≈ 27.1 hours |
-| Altnews | factcheck | ~0.03 articles/hour | 10 entries ≈ 307 hours |
+| **Event** | 0.68 | 48h | Did several channels report *this specific incident*? |
+| **Topic** | 0.60 | 7 days | Did several channels cover *this running story*? |
 
-The bias tags are **asserted, not measured** — they are editorial judgements
-hardcoded in `SOURCES`. The tool does not classify stance. It only reports which
-outlets covered a story; interpreting the framing is the human's job, which is
-what the comment boxes are for.
+### Why the topic tier exists
 
-**These rates are the central constraint on the whole tool.** A 40-article window
-covers about 4 hours of The Hindu but 307 hours of Altnews. The windows barely
-overlap in time, which is why cross-outlet matches are rarer than intuition
-suggests.
+In a live sample, five channels ran Iran-war segments: a missile-arsenal
+explainer, a drone shootdown, blasts on Hengam Island, the Strait of Hormuz, an
+interview. Every pair scored 0.55–0.77 — genuinely related, genuinely not the
+same event.
 
----
+At the event threshold that entire cluster is rejected, and the digest's top
+story becomes a two-channel NASA press release. **The war is the story worth
+writing about.** The event tier cannot see it, by construction.
 
-## 3. Headlines, not article text
+The topic tier is not a looser event tier. It is the one that finds ongoing
+stories, which is most of what a weekly column covers.
 
-All matching is on headlines. This is forced, not preferred:
+### Calibrating 0.68
 
-| Source | Body text in RSS | What the model would actually see |
-| --- | --- | --- |
-| OpIndia | 20,132 chars | 1,536 chars — **7.6%** |
-| Altnews | 6,382 chars | 1,536 chars — 24.1% |
-| Scroll.in | 1,733 chars | 1,536 chars — 88.6% |
-| NDTV | 186 chars | 186 chars |
-| The Hindu | **0 chars** | nothing |
-
-Two independent blockers:
-
-- **The Hindu ships no body text in its feed at all.** Comparing text would
-  require an HTTP fetch per article, per poll.
-- `all-mpnet-base-v2` has `max_seq_length = 384` tokens (~1,536 chars). It
-  truncates. "Comparing articles" would really mean comparing the first two
-  paragraphs.
-
-A headline is also the better unit on the merits: it is the outlet's own claim
-about what the story *is*, which is exactly the question being asked.
-
----
-
-## 4. Similarity threshold: 0.60
-
-Cosine similarity over L2-normalised `all-mpnet-base-v2` embeddings.
-
-Calibrated against pairs verified by reading them:
+Every cross-channel pair above 0.55 was read by hand:
 
 | Score | Pair | Verdict |
 | --- | --- | --- |
-| 0.686 | NDTV *"IRCTC Unveils New Ticket Booking Website"* / OpIndia *"Faster Tatkal bookings…"* | same story ✅ |
-| 0.631 | Hindu *"Sonam Wangchuk hangs on to hunger strike"* / Scroll *"…urge Wangchuk to end…"* | same story ✅ |
-| 0.588 | Hindu *"life imprisonment in Guntur dowry death"* / NDTV *"Man Gets Life Term For Killing Wife"* | same genre, **different event** ❌ |
+| 0.939 | ISS astronaut Anil Menon — CNN-News18 / Republic | same event ✅ |
+| 0.904 | Tamil Nadu custodial death — NewsX / India Today | same event ✅ |
+| 0.684 | 'Republic of Balochistan' video — Republic / NewsX | same event ✅ |
+| 0.667 | missile arsenal / Amirahmadi interview — WION / India Today | same war, **different segments** ❌ |
 
-Real matches sit at 0.61+. By 0.59 the matcher is pairing genre, not event.
-0.60 is the boundary, and it is narrow — this is a judgement from three verified
-pairs, not a tuned parameter.
-
-### The noise floor is not the bar
-
-Over 4,000 random quintets (one headline per source):
-
-```
-mean 0.152   p90 0.219   p99 0.279   p99.9 0.321   max 0.349
-```
-
-`app.py` uses a 0.30 threshold, which random beats only 0.4% of the time — so it
-is genuinely above noise. **That is not the same as being meaningful.** 0.30 sits
-far below where "same story" begins (~0.61). It answers "is this better than
-random?" when the question is "is this the same event?"
+The boundary is a **0.017 gap**. That is tight, and it is a judgement from four
+pairs, not a tuned parameter. It sits higher than the 0.60 that works for
+newspaper headlines because TV titles share formulaic prefixes that inflate
+similarity between unrelated segments; `clean_title()` strips those to widen it.
 
 ---
 
-## 5. Minimum pairwise, not mean
+## 6. Minimum pairwise, never mean
 
-Groups are scored on the **lowest** pairwise similarity among their members.
+Groups are scored on the **lowest** pairwise similarity among members.
 
-`app.py` uses the mean across all pairs. Averaging lets two real matches launder
-three unrelated headlines into a passing group. Its actual live output:
+A mean lets two real matches launder three unrelated segments into a passing
+group. If the claim is "these channels all covered one story," every pair must
+hold — which is a minimum, not an average.
 
-```
-mean pairwise 0.412 — above its 0.30 threshold, shipped as "Highlight of the Day"
-
-  The Hindu   Fulfil the promise: On restoring Statehood to Jammu and Kashmir
-  NDTV        "Even Ambulance Can't Pass": Inside Noida Lane Where 2 Died In Fire
-  Scroll.in   Anand Teltumbde: India's citizenship riddle demands documents…
-  OpIndia     Tahir Hussain and five others convicted in Ankit Sharma murder…
-  Altnews     Hardoi victim's hospital-bed statement falsely linked to Rajasthan…
-```
-
-Five unrelated stories. If a claim is "all these outlets covered one story," then
-*every* pair must hold — which is the definition of a minimum, not a mean.
+(`app.py` on `main` uses a mean over 6 pairs at a 0.30 floor. Its live output
+pairs a Kashmir editorial with a Noida building fire, a citizenship essay, a
+murder conviction, and a Hardoi fact-check, scores 0.412, and ships it as
+"Highlight of the Day.")
 
 ---
 
-## 6. Time proximity: 48 hours
+## 7. Time
 
-**This is the part `app.py` has never had, and it is not optional.**
-
-Similarity cannot distinguish "same story" from "same person, different event".
-Two pairs, identical scores, opposite meanings:
+Similarity alone cannot identify a story. Two pairs from testing, identical
+scores, opposite meanings:
 
 ```
-0.686  NDTV / OpIndia : IRCTC ticket booking website   — same day        ✅ same story
-0.686  NDTV / OpIndia : Pappu Yadav                    — 6 months apart  ❌ different events
+0.686  NDTV / OpIndia : IRCTC ticket booking   — same day       ✅ same story
+0.686  NDTV / OpIndia : Pappu Yadav            — 6 months apart ❌ different events
 ```
 
-The second came from searching 613,552 cross-outlet pairs in the project's
-archive. No threshold separates these two cases, because the false match scores
-*exactly as high* as the true one. Publication time is the only discriminator.
+No threshold separates these, because the false match scores exactly as high as
+the true one. Publication time is the only discriminator.
 
-Consequences:
-
-- Articles without a parseable timestamp are **dropped**, not admitted. They
-  cannot be time-checked, and admitting them reintroduces exactly the false
-  positives this filter exists to stop.
-- Timestamps must be correct. `app.py`'s `parse_time()` uses
-  `time.mktime(published_parsed)`, which reads a UTC struct as local time and is
-  wrong by the local UTC offset (5 hours on the dev machine). This tool uses
-  `calendar.timegm()`. A time-aware matcher built on the old function would be
-  matching on garbage.
-- 48h is deliberately loose. Widening it does not find more stories; it admits
-  same-entity false positives.
+Consequently: segments without a parseable timestamp are dropped, and timestamps
+use `calendar.timegm()`. `time.mktime()` reads a UTC struct as local time — the
+bug in `app.py:83` that makes every clock on `main` 5 hours wrong.
 
 ---
 
-## 7. Clustering
+## 8. Clustering
 
-Greedy, seeded from every article in turn:
+Greedy, seeded from every segment:
 
-1. Seed with article *i*.
-2. Repeatedly add the article — from a source not yet in the group — that
-   maximises the minimum similarity to the current group, subject to every
-   pairwise similarity ≥ 0.60 and total time span ≤ 48h.
-3. Stop when nothing qualifies.
-4. Rank all groups by source count, then by minimum similarity.
-5. Emit non-overlapping groups; no article appears in two clusters.
+1. Seed with segment *i*.
+2. Repeatedly add the segment — from a channel not yet in the group — maximising
+   minimum similarity to the group, subject to every pair ≥ floor and total span
+   ≤ window.
+3. Rank by channel count, then tightness.
+4. Emit non-overlapping groups. Event tier runs first; topic tier excludes what
+   it consumed.
 
-Greedy is not guaranteed optimal. It is used because an exhaustive search
-confirmed there is nothing for a better algorithm to find (see below), so the
-optimality gap is not currently the binding constraint. If cluster sizes grow
-once ingestion widens the window, this is worth revisiting.
-
----
-
-## 8. Known limits
-
-**Two sources is the realistic ceiling today.** Exhaustive search over all
-distinct-source triples in a live snapshot:
-
-```
-best 3-source group: min pairwise 0.454
-
-  Scroll.in : Bhojshala case, SC fines…
-  OpIndia   : Tahir Hussain convicted in Ankit Sharma murder…
-  Altnews   : Hindutva flagbearers threaten Muslim judge…
-```
-
-Three unrelated events sharing a *theme*. 0.454 is below even the 0.588
-same-genre-different-event mark. **No genuine 3-way story existed in the
-snapshot.** This is structural, not a tuning problem: you are comparing 4 hours
-of The Hindu against 12 days of Altnews and hoping they collide.
-
-**Altnews will rarely participate.** ~0.7 articles/day, and its beat is debunking
-specific viral claims rather than covering the news cycle. Requiring all five is
-unrealistic even in principle.
-
-**A snapshot is the wrong input.** The fix is not in the matching logic — it is
-persistence. A rolling multi-day window gives a story a real chance to pick up
-later coverage from a slower outlet. The matcher does not change; only its input
-does. See `INGESTION.md` (not yet written) for that design.
-
-**`debug=True` breaks this app.** Flask's reloader re-imports the module and
-torch then raises `NotImplementedError: Cannot copy out of meta tensor` on the
-next encode. `app_single.py` pins `debug=False` and warms the model at startup.
+Greedy is not optimal, but it is not the bottleneck: **0.06s for 343 segments**,
+scaling as O(n²), so ~4.6s at 3,000. The cost is embedding and transcript
+fetching, not the search.
 
 ---
 
-## 9. Reproducing the measurements
+## 9. Known limits
+
+**Five channels, all English.** Hindi is out — `all-mpnet-base-v2` cannot read
+it. A headline and its exact Hindi translation score **0.265**, while two
+*unrelated* English headlines score 0.301. One test pair scored **-0.029**. Aaj
+Tak and ABP need a multilingual model, which would invalidate every threshold in
+section 5.
+
+**Not on-air coverage, strictly.** These are the segments a channel chose to
+upload with captions enabled. A full 9pm debate that never gets clipped is
+invisible. Whisper over downloaded audio would reach it; that means downloading
+YouTube media, against their ToS, and real compute.
+
+**The 0.017 event boundary is narrow.** Four hand-read pairs set it. It will
+misfire. The topic tier is more forgiving and probably more useful week to week.
+
+**Transcript fetching is capped at 500/run** and takes minutes. A full week needs
+several passes. It costs no API quota (it scrapes captions) but it is the slow
+step. Failures are recorded as `''` rather than left NULL so genuinely
+caption-less videos are never retried.
+
+**Quota.** Free tier is 10,000 units/day. `playlistItems` and `videos` cost 1 per
+50; `search` costs 100. A daily ingest across 5 channels for 7 days is a few
+hundred units.
+
+---
+
+## 10. Environment
 
 ```bash
-venv/bin/python common_story.py     # matcher, standalone
-venv/bin/python app_single.py       # UI on :8081
+venv/bin/python ...     # NOT .venv/ -- that exists and is an empty stub
 ```
 
-Note `venv/` — **not** `.venv/`, which exists but is an empty stub without even
-feedparser installed.
+Requires `.env` with `YOUTUBE_API_KEY` (see `.env.example`). `.env` is gitignored;
+this repo is public.
+
+`debug=True` breaks `app_single.py`: Flask's reloader re-imports the module and
+torch raises `NotImplementedError: Cannot copy out of meta tensor` on the next
+encode. It is pinned off, with the model warmed at startup instead.
