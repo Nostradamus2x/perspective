@@ -164,8 +164,13 @@ Five unrelated stories, presented as one.
 **Similarity alone cannot identify a story.** Searching 613,552 cross-outlet
 pairs in the archive found NDTV/OpIndia headlines about Pappu Yadav six months
 apart scoring 0.686 — identical to a genuine same-day IRCTC match. Publication
-time is the missing discriminator, and the app has never used it. See the
-`single` branch for a matcher that does.
+time is the missing discriminator, and the app has never used it.
+
+The `single` branch carries a matcher that does use it. Note that `single` has
+since diverged into a different tool entirely — a weekly digest of English TV
+coverage built from YouTube transcripts, with no newspapers in it. It shares this
+app's embedding model and the min-pairwise-plus-time approach, but not its
+sources. See that branch's own `METHODOLOGY.md`.
 
 **Combinatorics.** The quartet search is a 4-deep nested loop — 40 articles per
 source is 2.56M combinations × 6 cosine ops, recomputed with `np.linalg.norm` on
