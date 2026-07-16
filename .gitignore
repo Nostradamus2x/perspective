@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+
+# Local SQLite + Flask caches; regenerated on run.
+single.db
+flask_cache_single/
+
+.DS_Store

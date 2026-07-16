@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "single",
+      "runtimeExecutable": "venv/bin/python",
+      "runtimeArgs": ["app_single.py"],
+      "port": 8081
+    }
+  ]
+}
